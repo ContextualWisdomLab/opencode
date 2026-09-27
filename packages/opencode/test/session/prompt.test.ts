@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { FetchHttpClient } from "effect/unstable/http"
 import { expect } from "bun:test"
-import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
+import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { NamedError } from "@opencode-ai/core/util/error"
@@ -487,6 +487,85 @@ it.instance("loop exits without an LLM request for interrupted orphan tool calls
     expect(yield* llm.hits).toHaveLength(0)
   }),
 )
+
+for (const structured of [true, false]) {
+  it.instance(
+    `auto compaction preserves native structured output registration: ${structured ? "tool" : "plaintext rejected"}`,
+    () =>
+      Effect.gen(function* () {
+        const { llm } = yield* useServerConfig(providerCfg)
+        const prompt = yield* SessionPrompt.Service
+        const sessions = yield* Session.Service
+        const compact = yield* SessionCompaction.Service
+        const chat = yield* sessions.create({ title: "Structured compaction" })
+        const format = Schema.decodeUnknownSync(SessionV1.Format)({
+          type: "json_schema",
+          schema: {
+            type: "object",
+            properties: { answer: { type: "number" } },
+            required: ["answer"],
+            additionalProperties: false,
+          },
+          retryCount: 0,
+        })
+        yield* prompt.prompt({
+          sessionID: chat.id,
+          agent: "build",
+          model: ref,
+          noReply: true,
+          format,
+          system: "Preserve the requested review contract.",
+          tools: { bash: false },
+          parts: [{ type: "text", text: "Return the answer in the requested schema." }],
+        })
+        yield* compact.create({ sessionID: chat.id, agent: "build", model: ref, auto: true })
+        expect((yield* sessions.messages({ sessionID: chat.id })).at(-1)?.info).toMatchObject({
+          format: Schema.encodeSync(SessionV1.Format)(format),
+        })
+        yield* llm.text("The user requires a structured answer; inspection is complete.")
+        if (structured) yield* llm.tool("StructuredOutput", { answer: 4 })
+        if (!structured) yield* llm.text("The answer is 4.")
+
+        const result = yield* prompt.loop({ sessionID: chat.id })
+        const messages = yield* sessions.messages({ sessionID: chat.id })
+        const users = messages.filter((message) => message.info.role === "user")
+        expect(users).toHaveLength(3)
+        for (const message of users) {
+          expect(message.info).toMatchObject({
+            format: Schema.encodeSync(SessionV1.Format)(format),
+            system: "Preserve the requested review contract.",
+            tools: { bash: false },
+          })
+        }
+        expect(result.info.role).toBe("assistant")
+        const hits = yield* llm.hits
+        expect(hits).toHaveLength(2)
+        expect(hits[1].body.tool_choice).toBe("required")
+        expect(hits[1].body.tools).toContainEqual(
+          expect.objectContaining({
+            type: "function",
+            function: expect.objectContaining({ name: "StructuredOutput" }),
+          }),
+        )
+        if (!structured) {
+          expect(result.info).toMatchObject({ error: { name: "StructuredOutputError", data: { retries: 0 } } })
+          if (result.info.role === "assistant") expect(result.info.structured).toBeUndefined()
+          return
+        }
+        if (result.info.role === "assistant") {
+          expect(result.info.error).toBeUndefined()
+          expect(result.info.structured).toEqual({ answer: 4 })
+        }
+        expect(result.parts).toContainEqual(
+          expect.objectContaining({
+            type: "tool",
+            tool: "StructuredOutput",
+            state: expect.objectContaining({ status: "completed", metadata: { valid: true } }),
+          }),
+        )
+      }),
+  )
+}
 
 it.instance("loop calls LLM and returns assistant message", () =>
   Effect.gen(function* () {

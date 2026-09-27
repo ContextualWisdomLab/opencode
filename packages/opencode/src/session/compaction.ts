@@ -12,7 +12,7 @@ import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { NotFoundError } from "@/storage/storage"
 
-import { Effect, Layer, Context } from "effect"
+import { Effect, Layer, Context, Option, Schema } from "effect"
 import * as DateTime from "effect/DateTime"
 import { InstanceState } from "@/effect/instance-state"
 import { isOverflow as overflow, usable } from "./overflow"
@@ -535,6 +535,9 @@ export const layer = Layer.effect(
               time: { created: Date.now() },
               agent: userMessage.agent,
               model: userMessage.model,
+              format: userMessage.format && Schema.decodeUnknownSync(SessionV1.Format)(userMessage.format),
+              tools: userMessage.tools,
+              system: userMessage.system,
             })
             const text =
               (input.overflow
@@ -591,9 +594,16 @@ export const layer = Layer.effect(
       auto: boolean
       overflow?: boolean
     }) {
+      const previous = Option.getOrUndefined(
+        yield* session.findMessage(input.sessionID, (message) => message.info.role === "user").pipe(Effect.orDie),
+      )
+      const request = previous?.info.role === "user" ? previous.info : undefined
       const msg = yield* session.updateMessage({
         id: MessageID.ascending(),
         role: "user",
+        format: request?.format && Schema.decodeUnknownSync(SessionV1.Format)(request.format),
+        tools: request?.tools,
+        system: request?.system,
         model: input.model,
         sessionID: input.sessionID,
         agent: input.agent,
