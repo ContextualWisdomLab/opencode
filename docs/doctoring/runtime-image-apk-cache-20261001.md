@@ -22,9 +22,10 @@ package selection, image stages, entrypoint, and application behavior are
 unchanged. A package-level regression joins logical `RUN` instructions
 case-insensitively and conservatively requires every literal `apk add`
 occurrence to be immediately followed by an unquoted `--no-cache`. It does not
-claim to parse the full shell grammar: ambiguous quoted prose, comments,
-redirections, or equivalent alternate spellings fail safe. Trivy remains the
-independent semantic scanner for the published exact head.
+claim to parse the full shell grammar: ambiguous literal occurrences in quoted
+prose, comments, or redirections fail safe. Nonliteral shell expansions are
+outside this narrow regression contract; Trivy remains the independent
+semantic scanner for the published exact head.
 
 RED was reproduced against protected `dev@b3f1a96c6dd7adeb28b36dd11add1998fc84d67b`:
 the executable predicate found the package-install instruction and exited 1

@@ -7,6 +7,7 @@ function literalApkAddOccurrences(dockerfile: string) {
   for (const rawLine of dockerfile.split("\n")) {
     const line = rawLine.trim()
     if (!instruction && (!line || line.startsWith("#"))) continue
+    if (instruction && (!line || line.startsWith("#"))) continue
 
     instruction += `${instruction ? " " : ""}${line.replace(/\\\s*$/, "").trim()}`
     if (line.endsWith("\\")) continue
@@ -34,9 +35,13 @@ RUN echo ready & apk add wget
 run > /tmp/apk.log apk add bash
   RUN apk update && \\
     apk add zsh
+RUN echo ready && \\
+  # explanatory comment
+
+  apk add fish
 `
 
-  expect(literalApkAddOccurrences(dockerfile)).toHaveLength(5)
+  expect(literalApkAddOccurrences(dockerfile)).toHaveLength(6)
 })
 
 test("package policy does not borrow no-cache from unrelated shell text", () => {
