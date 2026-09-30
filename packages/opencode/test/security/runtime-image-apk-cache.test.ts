@@ -6,6 +6,9 @@ function literalApkAddOccurrences(dockerfile: string) {
 
   for (const rawLine of dockerfile.split("\n")) {
     const line = rawLine.trim()
+    if (/^#\s*escape\s*=/i.test(line) && !/^#\s*escape\s*=\s*\\\s*$/i.test(line)) {
+      occurrences.push("unsupported Docker escape directive")
+    }
     if (!instruction && (!line || line.startsWith("#"))) continue
     if (instruction && (!line || line.startsWith("#"))) continue
 
@@ -13,6 +16,7 @@ function literalApkAddOccurrences(dockerfile: string) {
     if (line.endsWith("\\")) continue
 
     if (/^RUN(?:\s|$)/i.test(instruction)) {
+      if (/<<-?\s*\w/.test(instruction)) occurrences.push("unsupported RUN heredoc")
       for (const match of instruction.matchAll(/\bapk\s+add\b/g)) {
         occurrences.push(instruction.slice(match.index))
       }
@@ -56,6 +60,19 @@ test("package policy does not borrow no-cache from unrelated shell text", () => 
   for (const dockerfile of dockerfiles) {
     const [occurrence] = literalApkAddOccurrences(dockerfile)
     expect(immediatelyUsesNoCache(occurrence)).toBe(false)
+  }
+})
+
+test("package policy fails closed on unsupported Docker instruction forms", () => {
+  const dockerfiles = [
+    "RUN <<EOF\napk add curl\nEOF",
+    "# escape=`\nRUN echo ready && `\napk add curl",
+  ]
+
+  for (const dockerfile of dockerfiles) {
+    const policySubjects = literalApkAddOccurrences(dockerfile)
+    expect(policySubjects.length).toBeGreaterThan(0)
+    expect(policySubjects.some(immediatelyUsesNoCache)).toBe(false)
   }
 })
 

@@ -6,4 +6,5 @@
   downloaded apk index in an image layer; add an executable package-install
   conservative logical-`RUN` regression requiring every literal `apk add` to
   use an immediate unquoted `--no-cache`. Ambiguous literal occurrences fail
-  safe, and exact-head hosted security evidence remains required.
+  safe; unsupported Docker escape directives and RUN heredocs fail closed.
+  Exact-head hosted security evidence remains required.
