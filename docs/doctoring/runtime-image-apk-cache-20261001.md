@@ -19,13 +19,12 @@ independent of the PR's one-line workflow delta.
 The canonical OpenCode runtime image owned the package-install instruction.
 The smallest repair adds apk's native `--no-cache` option at that boundary;
 package selection, image stages, entrypoint, and application behavior are
-unchanged. A package-level regression parses logical `RUN` instructions
-case-insensitively, including compound, backgrounded, indented, and
-line-continued forms. It recognizes `apk add` only in executable command
-position, removes unquoted shell comments, and requires `--no-cache` in apk's
-arguments before any redirection. The regression therefore rejects quoted
-prose and fails closed for another cache-retaining install in those supported
-forms.
+unchanged. A package-level regression joins logical `RUN` instructions
+case-insensitively and conservatively requires every literal `apk add`
+occurrence to be immediately followed by an unquoted `--no-cache`. It does not
+claim to parse the full shell grammar: ambiguous quoted prose, comments,
+redirections, or equivalent alternate spellings fail safe. Trivy remains the
+independent semantic scanner for the published exact head.
 
 RED was reproduced against protected `dev@b3f1a96c6dd7adeb28b36dd11add1998fc84d67b`:
 the executable predicate found the package-install instruction and exited 1
