@@ -30,6 +30,36 @@ function stripShellComment(command: string) {
   return command.trim()
 }
 
+function apkInstallUsesNoCache(command: string) {
+  let quote: "'" | '"' | undefined
+  let escaped = false
+
+  for (let index = 0; index < command.length; index++) {
+    const character = command[index]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (character === "\\" && quote !== "'") {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (character === quote) quote = undefined
+      continue
+    }
+    if (character === "'" || character === '"') {
+      quote = character
+      continue
+    }
+    if (character === "<" || character === ">") {
+      return command.slice(0, index).split(/\s+/).includes("--no-cache")
+    }
+  }
+
+  return command.split(/\s+/).includes("--no-cache")
+}
+
 function apkInstallInstructions(dockerfile: string) {
   const installs: string[] = []
   let instruction = ""
@@ -44,7 +74,9 @@ function apkInstallInstructions(dockerfile: string) {
     if (/^RUN(?:\s|$)/i.test(instruction)) {
       for (const command of instruction.slice(3).split(/&&|\|\||[;&|]/)) {
         const executableCommand = stripShellComment(command)
-        if (/\bapk\s+add\b/.test(executableCommand)) installs.push(executableCommand)
+        if (/^(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*apk\s+add(?:\s|$)/.test(executableCommand)) {
+          installs.push(executableCommand)
+        }
       }
     }
     instruction = ""
@@ -73,7 +105,7 @@ test("package policy does not borrow no-cache from a neighboring command", () =>
 
   expect(commands).toHaveLength(3)
   for (const command of commands) {
-    expect(command.split(/\s+/)).not.toContain("--no-cache")
+    expect(apkInstallUsesNoCache(command)).toBe(false)
   }
 })
 
@@ -84,12 +116,20 @@ test("package policy treats Docker instruction names case-insensitively", () => 
   ])
 })
 
+test("package policy reads apk argv instead of prose or redirect targets", () => {
+  expect(apkInstallInstructions(`RUN echo "apk add curl"`)).toEqual([])
+
+  const [redirectedInstall] = apkInstallInstructions("RUN apk add curl > --no-cache")
+  expect(apkInstallUsesNoCache(redirectedInstall)).toBe(false)
+  expect(apkInstallUsesNoCache(`apk add "pkg>name" --no-cache`)).toBe(true)
+})
+
 test("runtime image package installs disable the persistent apk index cache", async () => {
   const dockerfile = await Bun.file(new URL("../../Dockerfile", import.meta.url)).text()
   const apkInstalls = apkInstallInstructions(dockerfile)
 
   expect(apkInstalls.length).toBeGreaterThan(0)
   for (const install of apkInstalls) {
-    expect(install.split(/\s+/)).toContain("--no-cache")
+    expect(apkInstallUsesNoCache(install)).toBe(true)
   }
 })
