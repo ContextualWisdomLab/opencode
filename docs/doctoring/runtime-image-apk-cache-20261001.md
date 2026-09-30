@@ -19,8 +19,10 @@ independent of the PR's one-line workflow delta.
 The canonical OpenCode runtime image owned the package-install instruction.
 The smallest repair adds apk's native `--no-cache` option at that boundary;
 package selection, image stages, entrypoint, and application behavior are
-unchanged. A package-level regression enumerates every `RUN apk add` instruction
-and requires the option, so adding another cache-retaining install fails closed.
+unchanged. A package-level regression parses logical `RUN` instructions,
+including compound, indented, and line-continued forms, and requires every
+literal `apk add` command to use the option. The regression therefore fails
+closed for another cache-retaining install in those supported forms.
 
 RED was reproduced against protected `dev@b3f1a96c6dd7adeb28b36dd11add1998fc84d67b`:
 the executable predicate found the package-install instruction and exited 1
