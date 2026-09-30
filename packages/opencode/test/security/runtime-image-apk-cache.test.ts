@@ -16,7 +16,7 @@ function literalApkAddOccurrences(dockerfile: string) {
     if (line.endsWith("\\")) continue
 
     if (/^RUN(?:\s|$)/i.test(instruction)) {
-      if (/<<-?\s*\w/.test(instruction)) occurrences.push("unsupported RUN heredoc")
+      if (/<<-?/.test(instruction)) occurrences.push("unsupported RUN heredoc")
       for (const match of instruction.matchAll(/\bapk\s+add\b/g)) {
         occurrences.push(instruction.slice(match.index))
       }
@@ -66,6 +66,8 @@ test("package policy does not borrow no-cache from unrelated shell text", () => 
 test("package policy fails closed on unsupported Docker instruction forms", () => {
   const dockerfiles = [
     "RUN <<EOF\napk add curl\nEOF",
+    "RUN <<'EOF'\napk add curl\nEOF",
+    'RUN <<"EOF"\napk add curl\nEOF',
     "# escape=`\nRUN echo ready && `\napk add curl",
   ]
 
