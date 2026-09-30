@@ -2,50 +2,59 @@ import { expect, test } from "bun:test"
 
 function literalApkAddOccurrences(dockerfile: string) {
   const occurrences: string[] = []
-  let instruction = ""
+  let sawInstruction = false
 
   for (const rawLine of dockerfile.split("\n")) {
     const line = rawLine.trim()
-    if (/^#\s*escape\s*=/i.test(line) && !/^#\s*escape\s*=\s*\\\s*$/i.test(line)) {
-      occurrences.push("unsupported Docker escape directive")
+    if (!sawInstruction && /^#\s*escape\s*=/i.test(line) && !/^#\s*escape\s*=\s*\\\s*$/i.test(line)) {
+      occcurrences.push("unsupported Docker escape directive")
     }
-    if (!instruction && (!line || line.startsWith("#"))) continue
-    if (instruction && (!line || line.startsWith("#"))) continue
+    if (!line || line.startsWith("#")) continue
+    sawInstruction = true
 
-    instruction += `${instruction ? " " : ""}${line.replace(/\\\s*$/, "").trim()}`
-    if (line.endsWith("\\")) continue
+    const trailingBackslashes = line.match(/\\+$/)?.[0].length ?? 0
+    if (trailingBackslashes % 2 === 1) {
+      occurrences.push("unsupported Docker line continuation")
+    }
+    if (!/^RUN(?:\s|$)/i.test(line)) continue
 
-    if (/^RUN(?:\s|$)/i.test(instruction)) {
-      if (/<<-?/.test(instruction)) occurrences.push("unsupported RUN heredoc")
-      for (const match of instruction.matchAll(/\bapk\s+add\b/g)) {
-        occurrences.push(instruction.slice(match.index))
+    let quote = ""
+    for (let index = 0; index < line.length; index++) {
+      const character = line[index]
+      if (quote) {
+        if (character === quote) quote = ""
+        else if (quote === '"' && character === "\\") index++
+        continue
+      }
+      if (character === '"' || character === "'") quote = character
+      else if (character === "\\") index++
+      else if (character === "<" && line[index + 1] === "<") {
+        occurrences.push("unsupported RUN heredoc")
+        break
       }
     }
-    instruction = ""
+
+    for (const match of line.matchAll(/\bapk\s+add\b/g)) {
+      occurrences.push(line.slice(match.index))
+    }
   }
 
   return occurrences
 }
 
-function immediatelyUsesNoCache(occurrence: string) {
+function immediatelyUsesNoCache(occcurrence: string) {
   return /^apk\s+add\s+--no-cache(?:\s|$)/.test(occurrence)
 }
 
-test("package policy recognizes literal apk add across logical RUN forms", () => {
+test("package policy recognizes literal apk add across shell-form RUN instructions", () => {
   const dockerfile = `
 RUN apk add curl
 RUN set -eux; apk add git
 RUN echo ready & apk add wget
 run > /tmp/apk.log apk add bash
-  RUN apk update && \\
-    apk add zsh
-RUN echo ready && \\
-  # explanatory comment
-
-  apk add fish
 `
 
-  expect(literalApkAddOccurrences(dockerfile)).toHaveLength(6)
+  expect(literalApkAddOccurrences(dockerfile)).toHaveLength(4)
 })
 
 test("package policy does not borrow no-cache from unrelated shell text", () => {
@@ -69,13 +78,37 @@ test("package policy fails closed on unsupported Docker instruction forms", () =
     "RUN <<'EOF'\napk add curl\nEOF",
     'RUN <<"EOF"\napk add curl\nEOF',
     "# escape=`\nRUN echo ready && `\napk add curl",
+    "RUN apk add --no-cache curl\nRUN ap\\\nk add bash",
+    "RUN apk add --no-cache curl\nRUN sh <\\\n<EOF\napk add bash\nEOF",
+    "RUN apk add --no-cache curl\nRUN echo ready && \\\napk add bash \\",
   ]
 
   for (const dockerfile of dockerfiles) {
     const policySubjects = literalApkAddOccurrences(dockerfile)
     expect(policySubjects.length).toBeGreaterThan(0)
-    expect(policySubjects.some(immediatelyUsesNoCache)).toBe(false)
+    expect(policySubjects.every(immediatelyUsesNoCache)).toBe(false)
   }
+})
+
+test("package policy does not swallow an instruction after escaped backslashes", () => {
+  const dockerfile = "RUN apk add --no-cache curl\nLABEL note=foo\\\\nRUN apk add bash"
+  const policySubjects = literalApkAddOccurrences(dockerfile)
+
+  expect(policySubjects).toHaveLength(2)
+  expect(policySubjects.every(immediatelyUsesNoCache)).toBe(false)
+})
+
+test("package policy ignores heredoc-like quoted data and late directive comments", () => {
+  const dockerfile = [
+    "RUN apk add --no-cache curl",
+    'RUN printf "%s\\\\n" "a << b"',
+    "# escape=`",
+    "RUN echo ok",
+  ].join("\\n")
+
+  const policySubjects = literalApkAddOccurrences(dockerfile)
+  expect(policySubjects).toHaveLength(1)
+  expect(policySubjects.every(immediatelyUsesNoCache)).toBe(true)
 })
 
 test("runtime image package installs disable the persistent apk index cache", async () => {

@@ -19,14 +19,15 @@ independent of the PR's one-line workflow delta.
 The canonical OpenCode runtime image owned the package-install instruction.
 The smallest repair adds apk's native `--no-cache` option at that boundary;
 package selection, image stages, entrypoint, and application behavior are
-unchanged. A package-level regression joins default backslash-continued,
-shell-form `RUN` instructions case-insensitively and conservatively requires
-every literal `apk add` occurrence to be immediately followed by an unquoted
-`--no-cache`. Ambiguous literal occurrences in quoted prose, comments, or
-redirections fail safe. Unsupported Docker escape directives and `RUN`
-heredocs also fail closed. Nonliteral shell expansions are outside this narrow
-regression contract; Trivy remains the independent semantic scanner for the
-published exact head.
+unchanged. A package-level regression inspects shell-form `RUN` instructions
+case-insensitively and conservatively requires every literal `apk add`
+occurrence to be immediately followed by an unquoted `--no-cache`. Ambiguous
+literal occurrences in quoted prose, comments, or redirections fail safe.
+Unsupported Docker escape directives, unescaped line continuations, and `RUN`
+heredocs also fail closed; escaped trailing backslashes, heredoc-like quoted
+data, and late directive-shaped comments are not misclassified. Nonliteral
+shell expansions are outside this narrow regression contract; Trivy remains
+the independent semantic scanner for the published exact head.
 
 RED was reproduced against protected `dev@b3f1a96c6dd7adeb28b36dd11add1998fc84d67b`:
 the executable predicate found the package-install instruction and exited 1
