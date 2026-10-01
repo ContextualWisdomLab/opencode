@@ -8,13 +8,16 @@ const safeDependencyFloors = {
   postcss: "8.5.28",
 } as const
 
-function lockedVersion(lockfile: string, packageName: string) {
+function lockedVersions(lockfile: string, packageName: string) {
   const escapedName = packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const match = lockfile.match(
-    new RegExp(`^    "${escapedName}": \\["${escapedName}@([^"+]+)`, "m"),
+  const versions = Array.from(
+    lockfile.matchAll(new RegExp(`^    "[^"]+": \\["${escapedName}@([^"+]+)`, "gm")),
+    (match) => match[1],
   )
-  if (!match) throw new Error(`missing ${packageName} from GLM 5.2 video lockfile`)
-  return match[1]
+  if (versions.length === 0) {
+    throw new Error(`missing ${packageName} from GLM 5.2 video lockfile`)
+  }
+  return versions
 }
 
 test("GLM 5.2 video lock excludes scanner-confirmed vulnerable dependency ranges", async () => {
@@ -23,15 +26,25 @@ test("GLM 5.2 video lock excludes scanner-confirmed vulnerable dependency ranges
   ).text()
 
   for (const [packageName, minimumVersion] of Object.entries(safeDependencyFloors)) {
-    const version = lockedVersion(lockfile, packageName)
-    expect(Bun.semver.satisfies(version, `>=${minimumVersion}`), `${packageName}@${version}`).toBe(
-      true,
-    )
+    for (const version of lockedVersions(lockfile, packageName)) {
+      expect(Bun.semver.satisfies(version, `>=${minimumVersion}`), `${packageName}@${version}`).toBe(
+        true,
+      )
+    }
   }
 })
 
 test("dependency-floor oracle fails closed when a lock entry is absent", () => {
-  expect(() => lockedVersion('    "postcss": ["postcss@8.5.28"]', "nanoid")).toThrow(
+  expect(() => lockedVersions('    "postcss": ["postcss@8.5.28"]', "nanoid")).toThrow(
     "missing nanoid",
   )
+})
+
+test("dependency-floor oracle enumerates nested duplicate versions", () => {
+  const lockfile = [
+    '    "nanoid": ["nanoid@3.3.19"]',
+    '    "postcss/nanoid": ["nanoid@3.3.15"]',
+  ].join("\n")
+
+  expect(lockedVersions(lockfile, "nanoid")).toEqual(["3.3.19", "3.3.15"])
 })

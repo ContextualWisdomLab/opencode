@@ -39,19 +39,20 @@ Remotion 4.0.532 and these minimum repaired versions:
 | `nanoid` | 3.3.15 | 3.3.19 |
 | `postcss` | 8.5.15 | 8.5.28 |
 
-The regression reads the production lock, checks every minimum with Bun's
-semver implementation, and throws if an expected package is absent. This
-prevents both a downgrade and a vacuous pass caused by an unexpected lock
-shape.
+The regression reads the production lock, checks every resolved occurrence
+with Bun's semver implementation, and throws if an expected package is absent.
+A duplicate-version fixture proves that nested lock keys are enumerated. This
+prevents a downgrade, a hidden vulnerable duplicate, and a vacuous pass caused
+by an unexpected lock shape.
 
 ## Executable evidence
 
 Before regeneration, the focused test failed on
 `baseline-browser-mapping@2.10.40` (one pass, one failure). After regeneration:
 
-- focused dependency regression: 2 tests, 6 assertions, all passing;
-- complete `packages/opencode/test/security` directory: 9 tests,
-  15 assertions, all passing;
+- focused dependency regression: 3 tests, 7 assertions, all passing;
+- complete `packages/opencode/test/security` directory: 10 tests,
+  16 assertions, all passing;
 - `bun install --frozen-lockfile`: 248 packages installed successfully;
 - Remotion bundled `src/index.tsx` successfully in 6.121 seconds.
 
