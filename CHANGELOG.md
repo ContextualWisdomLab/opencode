@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Upgrade both directly shipped GitHub Action runtimes to `@actions/core`
+  3.0.1 and `@actions/github` 9.1.1, remove their vulnerable Undici 5
+  dependency paths, and derive the GitHub context type from the public API.
+  Retain a lockfile regression for both publication boundaries.
 - Give the complete shared build-container chain one fixed UID/GID 10001
   `build_agent` identity, elevate derived images only while provisioning, and
   restore the non-root identity with writable Bun and Cargo caches before each

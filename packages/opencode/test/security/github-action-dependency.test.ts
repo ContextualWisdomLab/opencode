@@ -49,3 +49,18 @@ runs:
 
   expect(cacheRefs(action)).toEqual([reviewedCacheCommit, "v4", "v4", "v4"])
 })
+
+test("published GitHub Action runtimes exclude vulnerable Undici 5", async () => {
+  const lockfiles = [
+    ["../../../../github/bun.lock", /"(?:undici|@actions\/http-client\/undici)": \["undici@5\./],
+    [
+      "../../../../bun.lock",
+      /"@actions\/(?:core\/@actions\/http-client|github|http-client)\/undici": \["undici@5\./,
+    ],
+  ] as const
+
+  for (const [path, vulnerableUndici] of lockfiles) {
+    const lockfile = await Bun.file(new URL(path, import.meta.url)).text()
+    expect(lockfile).not.toMatch(vulnerableUndici)
+  }
+})
