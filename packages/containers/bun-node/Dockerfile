@@ -1,6 +1,8 @@
 ARG REGISTRY=ghcr.io/anomalyco
 FROM ${REGISTRY}/build/base:24.04
 
+USER root
+
 SHELL ["/bin/bash", "-lc"]
 
 ARG NODE_VERSION=24.4.0
@@ -22,3 +24,7 @@ RUN set -euo pipefail; \
   bun --version; \
   node --version; \
   npm --version
+
+ENV BUN_INSTALL_CACHE_DIR=/home/build_agent/.cache/bun
+
+USER build_agent:build_agent

@@ -1,6 +1,8 @@
 ARG REGISTRY=ghcr.io/anomalyco
 FROM ${REGISTRY}/build/rust:24.04
 
+USER root
+
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -9,12 +11,9 @@ RUN apt-get update \
     libwebkit2gtk-4.1-dev \
     librsvg2-dev \
     patchelf \
-  && rm -rf /var/lib/apt/lists/* \
-  && groupadd --gid 10001 tauri \
-  && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash tauri
+  && rm -rf /var/lib/apt/lists/*
 
-ENV HOME=/home/tauri \
-  CARGO_HOME=/home/tauri/.cargo \
-  BUN_INSTALL_CACHE_DIR=/home/tauri/.cache/bun
+ENV CARGO_HOME=/home/build_agent/.cargo \
+  BUN_INSTALL_CACHE_DIR=/home/build_agent/.cache/bun
 
-USER tauri:tauri
+USER build_agent:build_agent

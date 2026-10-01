@@ -15,4 +15,10 @@ RUN apt-get update \
     unzip \
     xz-utils \
     zip \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --gid 10001 build_agent \
+  && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash build_agent
+
+ENV HOME=/home/build_agent
+
+USER build_agent:build_agent
