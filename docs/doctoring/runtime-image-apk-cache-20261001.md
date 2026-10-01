@@ -54,6 +54,15 @@ Hosted build, Trivy, and Semgrep must independently confirm the published
 successor exact head; no inherited finding outside the OpenCode runtime image
 is hidden or claimed repaired by this delta.
 
+Independent review then proved the first hardening predicate was incomplete:
+Docker instructions are case-insensitive, but it counted only uppercase
+`FROM`, and it asserted the final `HOME` value without asserting that BusyBox
+actually created that home. RED fixtures appended a lowercase mutable final
+stage and separately changed `adduser -h /home/opencode` to `adduser -H`;
+the predecessor predicate accepted both. The successor policy counts `FROM`
+case-insensitively, pins the exact group/user/home creation instructions, and
+retains both mutations as negative executable cases.
+
 ## Decision and alternatives
 
 The selected design keeps one final runtime stage and one runtime package set.
