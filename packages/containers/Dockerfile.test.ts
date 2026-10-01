@@ -9,16 +9,7 @@ const sources = Object.fromEntries(
 
 describe("shared build-container runtime identity", () => {
   test("the base image owns the fixed build account", () => {
-    const instructions = dockerfileInstructions(sources.base)
-    expect(
-      instructions.some(
-        (line) =>
-          line.startsWith("RUN ") &&
-          line.includes("groupadd --gid 10001 build_agent") &&
-          line.includes("useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash build_agent"),
-      ),
-    ).toBe(true)
-    expect(instructions.some((line) => line.startsWith("ENV ") && line.includes("HOME=/home/build_agent"))).toBe(true)
+    expect(hasBaseIdentity(sources.base)).toBe(true)
   })
 
   test("every published image finishes as the shared non-root account", () => {
@@ -29,18 +20,57 @@ describe("shared build-container runtime identity", () => {
 
   test("derived images elevate only for provisioning and do not recreate the account", () => {
     for (const name of names.slice(1)) {
-      const instructions = dockerfileInstructions(sources[name])
-      expect(instructions.indexOf("USER root"), name).toBeGreaterThan(0)
-      expect(instructions.indexOf("USER root"), name).toBeLessThan(instructions.findIndex((line) => line.startsWith("RUN ")))
-      expect(instructions.some((line) => /\b(?:groupadd|useradd)\b/.test(line)), name).toBe(false)
+      expect(hasDerivedIdentity(sources[name]), name).toBe(true)
     }
+  })
+
+  test("rejects identity evidence placed only in a discarded stage", () => {
+    const baseBypass = `
+FROM ubuntu:24.04 AS discarded
+RUN groupadd --gid 10001 build_agent && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash build_agent
+ENV HOME=/home/build_agent
+FROM scratch
+USER build_agent:build_agent
+`
+    const childBypass = `
+FROM ubuntu:24.04 AS discarded
+USER root
+RUN apt-get update
+FROM scratch
+USER build_agent:build_agent
+`
+    expect(hasBaseIdentity(baseBypass)).toBe(false)
+    expect(hasDerivedIdentity(childBypass)).toBe(false)
   })
 })
 
+function hasBaseIdentity(source: string) {
+  const instructions = dockerfileInstructions(source)
+  return (
+    instructions.some(
+      (line) =>
+        line.startsWith("RUN ") &&
+        line.includes("groupadd --gid 10001 build_agent") &&
+        line.includes("useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash build_agent"),
+    ) &&
+    instructions.some((line) => line.startsWith("ENV ") && line.includes("HOME=/home/build_agent"))
+  )
+}
+
+function hasDerivedIdentity(source: string) {
+  const instructions = dockerfileInstructions(source)
+  return (
+    instructions.indexOf("USER root") > 0 &&
+    instructions.indexOf("USER root") < instructions.findIndex((line) => line.startsWith("RUN ")) &&
+    !instructions.some((line) => /\b(?:groupadd|useradd)\b/.test(line))
+  )
+}
+
 function dockerfileInstructions(source: string) {
-  return source
+  const instructions = source
     .replace(/\\\n\s*/g, " ")
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("#") && !line.startsWith("ARG "))
+  return instructions.slice(instructions.findLastIndex((line) => line.startsWith("FROM ")))
 }
