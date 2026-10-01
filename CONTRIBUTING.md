@@ -181,6 +181,8 @@ With that said, you may want to try these methods, as they might work for you.
 
 **All PRs must reference an existing issue.** Before opening a PR, open an issue describing the bug or feature. This helps maintainers triage and prevents duplicate work. PRs without a linked issue may be closed without review.
 
+This requirement is skipped when the repository issue tracker is disabled.
+
 - Use `Fixes #123` or `Closes #123` in your PR description to link the issue
 - For small fixes, a brief issue is fine - just enough context for maintainers to understand the problem
 
