@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Run the Tauri Linux build image as a dedicated fixed UID/GID 10001 identity
+  while keeping Cargo and Bun package caches in its writable home; retain a
+  production-Dockerfile regression for both contracts.
 - Run the stats server image as a dedicated fixed UID/GID 10001 identity with
   an explicit writable home, and retain a production-Dockerfile regression
   that prevents a later root final stage.
