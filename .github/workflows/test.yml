@@ -69,6 +69,11 @@ jobs:
         env:
           OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: ${{ runner.os == 'Windows' && 'true' || 'false' }}
 
+      - name: Check PR management contract
+        if: runner.os == 'Linux'
+        working-directory: script/github
+        run: bun test pr-management-contract.test.mjs
+
       - name: Check generated client
         if: runner.os == 'Linux'
         working-directory: packages/client
