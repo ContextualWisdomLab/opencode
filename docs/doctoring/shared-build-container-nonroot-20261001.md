@@ -70,10 +70,14 @@ The workflow contract was RED because it found no pull-request path, no
 build-only step, and no stale-run concurrency group. Repair commit
 `d528e665a2d4d311592db1b2ab84a1c42ae07428` runs the same script with
 `PUSH=0` on pull requests, skips GHCR login there, preserves `PUSH=1` for
-`dev`/manual publication, and cancels superseded revisions. Focused Bun 1.3.14
-verification is **9 passed, 0 failed, 22 assertions** across the workflow,
-hierarchy, and Tauri contracts. A fresh hosted run on the successor exact head
-is still required; this source repair is not hosted build evidence by itself.
+`dev`/manual publication, and cancels superseded revisions. Exact-head review
+then found that the shared job still granted `packages: write` to pull-request
+builds. RED reproduced the authority-boundary overreach; commit
+`58af2ecb7277d388789c41c12aed325ed8a4c5ae` separates the read-only PR build
+from the write-capable publish job. Focused Bun 1.3.14 verification is **10
+passed, 0 failed, 29 assertions** across the workflow, hierarchy, and Tauri
+contracts. A fresh hosted run on the successor exact head is still required;
+this source repair is not hosted build evidence by itself.
 
 ## User, operations, and failure scenes
 
