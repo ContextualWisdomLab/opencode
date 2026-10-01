@@ -44,9 +44,13 @@ On PR #5 exact head `699f1408dae65120f5b88caa77359dff1c22d699`,
 the executable hierarchy contract failed all three behaviors: no base-owned
 account, no common final user across all five images, and no explicit child
 elevation before provisioning. Source repair commit
-`3b1f19abdc7b6fef3b5bae4fe9e4a943188e38bf` makes the Bun 1.3.14 focused
-suite GREEN: **6 passed, 0 failed, 23 assertions**. The retained Tauri fixture
-also rejects required text placed only in a discarded stage or comments.
+`3b1f19abdc7b6fef3b5bae4fe9e4a943188e38bf` repaired the production files.
+Exact-head review then proved that the first hierarchy oracle accepted account
+and root-transition evidence placed only in a discarded stage. The bypass was
+RED at `0ee9c6501450d7875c04c6a82719061d9699872b`; oracle repair commit
+`6fb3f1fc0d3f0572c454a3ae8e61b9ddf59715c7` restricts every predicate to the
+final stage. The Bun 1.3.14 focused suite is GREEN: **7 passed, 0 failed, 16
+assertions**, including the retained Tauri inert-stage case.
 
 No local Docker or Podman runtime is available, so image-build and scanner
 success are not claimed. PR #6 remains **Draft / Proposed / merge HOLD** until
