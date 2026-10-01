@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refresh the GLM 5.2 video artifact lock within its existing Remotion ranges,
+  removing five scanner-confirmed vulnerable transitive versions and retaining
+  a fail-closed dependency-floor regression for the committed lockfile.
 - Upgrade both directly shipped GitHub Action runtimes to `@actions/core`
   3.0.1 and `@actions/github` 9.1.1, remove their vulnerable Undici 5
   dependency paths, and derive the GitHub context type from the public API.
