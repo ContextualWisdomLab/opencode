@@ -58,6 +58,23 @@ its prerequisites integrate ordinarily and fresh exact-head build,
 Trivy/Semgrep, product Checks, resolved threads, and qualifying independent
 approval are acceptable.
 
+## Exact-head build admission repair
+
+Review of the acceptance path found that `.github/workflows/containers.yml`
+only listened to `push` and `workflow_dispatch`, while PR #6 required a hosted
+image build before merge. The gate therefore could not materialize on any pull
+request head. Reusing the existing build script with `--push` was also unsafe:
+it would ask a pull-request token to authenticate and publish to GHCR.
+
+The workflow contract was RED because it found no pull-request path, no
+build-only step, and no stale-run concurrency group. Repair commit
+`d528e665a2d4d311592db1b2ab84a1c42ae07428` runs the same script with
+`PUSH=0` on pull requests, skips GHCR login there, preserves `PUSH=1` for
+`dev`/manual publication, and cancels superseded revisions. Focused Bun 1.3.14
+verification is **9 passed, 0 failed, 22 assertions** across the workflow,
+hierarchy, and Tauri contracts. A fresh hosted run on the successor exact head
+is still required; this source repair is not hosted build evidence by itself.
+
 ## User, operations, and failure scenes
 
 A CI job consuming any published image starts as `build_agent`, can populate
