@@ -14,11 +14,10 @@ describe("tauri-linux production image", () => {
   test("rejects required text outside the final runtime stage", () => {
     const bypass = `
 FROM ubuntu:24.04 AS discarded
-# groupadd --gid 10001 tauri
-# useradd --uid 10001 --gid 10001
-# ENV HOME=/home/tauri CARGO_HOME=/home/tauri/.cargo BUN_INSTALL_CACHE_DIR=/home/tauri/.cache/bun
+# USER root
+# ENV CARGO_HOME=/home/build_agent/.cargo BUN_INSTALL_CACHE_DIR=/home/build_agent/.cache/bun
 FROM scratch
-USER tauri:tauri
+USER build_agent:build_agent
 `
     expect(hasRuntimeIdentity(bypass)).toBe(false)
     expect(hasWritableCaches(bypass)).toBe(false)
@@ -37,14 +36,9 @@ function finalStageInstructions(source: string) {
 function hasRuntimeIdentity(source: string) {
   const instructions = finalStageInstructions(source)
   return (
-    instructions.some(
-      (line) =>
-        line.startsWith("RUN ") &&
-        line.includes("&& groupadd --gid 10001 tauri") &&
-        line.includes("&& useradd --uid 10001 --gid 10001"),
-    ) &&
-    instructions.some((line) => line.startsWith("ENV ") && line.includes("HOME=/home/tauri")) &&
-    instructions.at(-1) === "USER tauri:tauri"
+    instructions.includes("USER root") &&
+    instructions.indexOf("USER root") < instructions.findIndex((line) => line.startsWith("RUN ")) &&
+    instructions.at(-1) === "USER build_agent:build_agent"
   )
 }
 
@@ -52,7 +46,7 @@ function hasWritableCaches(source: string) {
   return finalStageInstructions(source).some(
     (line) =>
       line.startsWith("ENV ") &&
-      line.includes("CARGO_HOME=/home/tauri/.cargo") &&
-      line.includes("BUN_INSTALL_CACHE_DIR=/home/tauri/.cache/bun"),
+      line.includes("CARGO_HOME=/home/build_agent/.cargo") &&
+      line.includes("BUN_INSTALL_CACHE_DIR=/home/build_agent/.cache/bun"),
   )
 }

@@ -49,3 +49,12 @@ PR #5 remains **Draft / Proposed / merge HOLD**. Fresh exact-head build,
 Trivy/Semgrep, full product Checks, resolved review threads, and qualifying
 independent review are required before ordinary merge. The `base`, `bun-node`,
 `publish`, and `rust` runtime identities remain Open Gap work.
+
+## Successor hierarchy integration
+
+PR #6 keeps this leaf repair alive as its exact stacked parent, then removes the
+duplicate `tauri` account in favor of the single `build_agent` identity owned by
+`base`. Tauri still selects root before its package-install `RUN`, restores the
+shared non-root user afterward, and retains both writable-cache and inert-stage
+regressions. This is a successor integration, not evidence that PR #5 or #6 has
+merged or passed hosted image/scanner gates.
