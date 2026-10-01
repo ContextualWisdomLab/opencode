@@ -34,7 +34,14 @@ layer.
 
 ## Verification and acceptance
 
-Bun 1.3.14 reports **2 passed, 0 failed, 6 assertions** and `git diff --check`
+The first regression used raw substring checks. At exact head
+`e04a008e21e46b01fe49d5d583a76d460f5ba4a7`, a fixture containing the required
+strings only in comments and a discarded build stage still passed that oracle.
+The durable contract now normalizes Dockerfile instructions, selects only the
+final stage, and requires the account `RUN`, writable-cache `ENV`, and final
+`USER` instructions there. The bypass is retained as an executable case.
+
+Bun 1.3.14 reports **3 passed, 0 failed, 4 assertions** and `git diff --check`
 is clean. No Docker or Podman runtime is available locally, so image-build and
 scanner success are not claimed.
 
