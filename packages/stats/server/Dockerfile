@@ -4,6 +4,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+RUN addgroup -S -g 10001 stats \
+    && adduser -S -D -u 10001 -G stats -h /home/stats stats
 
 FROM base AS pruner
 
@@ -29,4 +31,6 @@ WORKDIR /app/packages/stats/server
 
 EXPOSE 3000
 
+USER stats:stats
+ENV HOME=/home/stats
 CMD ["bun", "src/server.ts"]

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Run the stats server image as a dedicated fixed UID/GID 10001 identity with
+  an explicit writable home, and retain a production-Dockerfile regression
+  that prevents a later root final stage.
 - Pin the published OpenCode composite action's `actions/cache` dependency to
   the reviewed v4.3.0 commit and retain an executable immutable-reference
   regression.
