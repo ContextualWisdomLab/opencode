@@ -2,6 +2,8 @@
 
 Closes #
 
+_Omit the issue number when this repository's issue tracker is disabled._
+
 ### Type of change
 
 - [ ] Bug fix
