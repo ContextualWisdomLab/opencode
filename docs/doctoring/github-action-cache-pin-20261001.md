@@ -31,7 +31,11 @@ single executable `actions/cache` edge to equal the reviewed commit. It fails
 if the edge returns to a tag, disappears, duplicates, or changes to a
 different commit without an explicit test review. An adversarial fixture also
 proves that cache-shaped text in an inert block scalar cannot satisfy the
-oracle while an executable step remains mutable.
+oracle while an executable step remains mutable. The identity match is
+case-insensitive, as GitHub repository resolution is, and covers
+`actions/cache` sub-actions such as `restore` and `save`; a second adversarial
+fixture prevents a reviewed root edge from hiding any mutable case-varied or
+sub-action edge.
 
 For a consumer invoking the composite action, cache execution is now bound to
 the reviewed upstream tree instead of the tag value observed at run time.
