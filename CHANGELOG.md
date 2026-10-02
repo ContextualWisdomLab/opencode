@@ -5,7 +5,8 @@
 - Remove repository-owned direct model execution from GitHub Actions and the
   release call graph; release notes now use GitHub's platform generator while
   the central ContextualWisdomLab orchestration contract remains the sole model
-  owner.
+  owner. The executable contract also rejects direct OpenCode commands hidden
+  behind POSIX environment assignments or `env`/`exec` command wrappers.
 - Refresh the GLM 5.2 video artifact lock within its existing Remotion ranges,
   removing five scanner-confirmed vulnerable transitive versions and retaining
   a fail-closed dependency-floor regression for the committed lockfile.

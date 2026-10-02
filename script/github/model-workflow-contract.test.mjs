@@ -156,7 +156,11 @@ if (authorAssociation === 'CONTRIBUTOR') {
               findings.push(`${name}: direct model action at ${location}.${key}`)
             }
             if (key === "run") {
-              if (/(?:^|[\n;&|()]|\$\()\s*opencode(?:\s|$)/m.test(entry)) {
+              if (
+                /(?:^|[\n;&|()]|\$\()\s*(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|()]*)\s+)*(?:env(?:\s+-[^\s;&|()]+)*\s+(?:[A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s;&|()]*)\s+)*)?(?:exec\s+)?opencode(?:\s|$)/m.test(
+                  entry,
+                )
+              ) {
                 findings.push(`${name}: direct OpenCode command at ${location}.${key}`)
               }
               if (entry.includes("opencode.ai/install") || entry.includes("opencode-ai")) {
@@ -201,6 +205,9 @@ if (authorAssociation === 'CONTRIBUTOR') {
             steps: [
               { uses: "anomalyco/opencode/github@0123456789abcdef" },
               { run: "bun install --global opencode-ai" },
+              { run: "OPENCODE_CONFIG=/tmp/review.json opencode run review" },
+              { run: "env OPENCODE_CONFIG=/tmp/review.json opencode run review" },
+              { run: "exec opencode run review" },
             ],
           },
         },
@@ -208,6 +215,9 @@ if (authorAssociation === 'CONTRIBUTOR') {
     ).toEqual([
       "mutation.yaml: direct model action at mutation.yaml.jobs.review.steps[0].uses",
       "mutation.yaml: mutable OpenCode installation at mutation.yaml.jobs.review.steps[1].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[2].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[3].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[4].run",
     ])
   })
 
