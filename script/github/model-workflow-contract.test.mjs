@@ -156,7 +156,11 @@ if (authorAssociation === 'CONTRIBUTOR') {
               findings.push(`${name}: direct model action at ${location}.${key}`)
             }
             if (key === "run") {
-              if (/(?<![\w-])opencode(?:\.exe)?["']?\s+["']?run(?:["']|\b)/i.test(entry)) {
+              if (
+                /(?<![\w-])opencode(?:\.exe)?["']?(?:\s+(?:["']?--(?:no-(?:print-logs|pure)|(?:print-logs|pure)(?:["']?=["']?(?:true|false))?)["']?|["']?--log-level["']?(?:\s+|=)["']?(?:DEBUG|INFO|WARN|ERROR)["']?))*\s+["']?run(?:["']|\b)/i.test(
+                  entry,
+                )
+              ) {
                 findings.push(`${name}: direct OpenCode command at ${location}.${key}`)
               }
               if (entry.includes("opencode.ai/install") || entry.includes("opencode-ai")) {
@@ -210,6 +214,18 @@ if (authorAssociation === 'CONTRIBUTOR') {
               { run: '"opencode" run review' },
               { run: "'/usr/local/bin/opencode' run review" },
               { run: "opencode 'run' review" },
+              { run: "opencode --print-logs run review" },
+              { run: "opencode --log-level DEBUG run review" },
+              { run: "opencode --pure run review" },
+              { run: "opencode --pure --print-logs --log-level=DEBUG run review" },
+              { run: 'opencode --log-level "DEBUG" run review' },
+              { run: 'opencode "--log-level=DEBUG" run review' },
+              { run: 'opencode "--pure" run review' },
+              { run: "opencode --pure=false run review" },
+              { run: "opencode --no-print-logs run review" },
+              { run: 'opencode --pure="false" run review' },
+              { run: "opencode --print-logs='true' run review" },
+              { run: 'opencode "--log-level"=DEBUG run review' },
               { run: '& "C:\\Program Files\\opencode.exe" run review' },
             ],
           },
@@ -228,7 +244,32 @@ if (authorAssociation === 'CONTRIBUTOR') {
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[9].run",
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[10].run",
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[11].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[12].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[13].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[14].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[15].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[16].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[17].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[18].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[19].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[20].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[21].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[22].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[23].run",
     ])
+    expect(
+      inspect("negative-mutation.yaml", {
+        jobs: {
+          review: {
+            steps: [
+              { run: "my-opencode --pure run review" },
+              { run: "opencode --pureful run review" },
+              { run: "opencode --log-level WARNING run review" },
+            ],
+          },
+        },
+      }),
+    ).toEqual([])
   })
 
   test("keeps the release call graph model-free and exact", async () => {
