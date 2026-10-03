@@ -9,7 +9,9 @@
   behind assignments, command wrappers, nested shell strings, quoting, or
   executable paths. The contract also recognizes the real CLI's `--print-logs`,
   `--log-level`, and `--pure` global options before `run`, using one conservative
-  fail-closed deny-pattern instead of enumerating shell wrapper names.
+  fail-closed deny-pattern instead of enumerating shell wrapper names. Shell
+  line continuations cannot split the executable, option value, or `run` token
+  away from that inspection.
 - Refresh the GLM 5.2 video artifact lock within its existing Remotion ranges,
   removing five scanner-confirmed vulnerable transitive versions and retaining
   a fail-closed dependency-floor regression for the committed lockfile.

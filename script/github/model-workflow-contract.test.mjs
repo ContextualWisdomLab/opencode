@@ -156,9 +156,10 @@ if (authorAssociation === 'CONTRIBUTOR') {
               findings.push(`${name}: direct model action at ${location}.${key}`)
             }
             if (key === "run") {
+              const normalizedCommand = entry.replace(/[\\`]\r?\n/g, "")
               if (
                 /(?<![\w-])opencode(?:\.exe)?["']?(?:\s+(?:["']?--(?:no-(?:print-logs|pure)|(?:print-logs|pure)(?:["']?=["']?(?:true|false))?)["']?|["']?--log-level["']?(?:\s+|=)["']?(?:DEBUG|INFO|WARN|ERROR)["']?))*\s+["']?run(?:["']|\b)/i.test(
-                  entry,
+                  normalizedCommand,
                 )
               ) {
                 findings.push(`${name}: direct OpenCode command at ${location}.${key}`)
@@ -226,6 +227,13 @@ if (authorAssociation === 'CONTRIBUTOR') {
               { run: 'opencode --pure="false" run review' },
               { run: "opencode --print-logs='true' run review" },
               { run: 'opencode "--log-level"=DEBUG run review' },
+              { run: "opencode \\\n  run review" },
+              { run: "opencode \\\n  --pure \\\n  run review" },
+              { run: "opencode --log-level \\\n  DEBUG \\\n  run review" },
+              { run: "opencode `\n  --pure `\n  run review" },
+              { run: "opencode --log-level=\\\nDEBUG run review" },
+              { run: "opencode --pure=\\\nfalse run review" },
+              { run: "opencode --log-level\\\n=DEBUG run review" },
               { run: '& "C:\\Program Files\\opencode.exe" run review' },
             ],
           },
@@ -256,6 +264,13 @@ if (authorAssociation === 'CONTRIBUTOR') {
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[21].run",
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[22].run",
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[23].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[24].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[25].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[26].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[27].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[28].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[29].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[30].run",
     ])
     expect(
       inspect("negative-mutation.yaml", {
@@ -265,6 +280,8 @@ if (authorAssociation === 'CONTRIBUTOR') {
               { run: "my-opencode --pure run review" },
               { run: "opencode --pureful run review" },
               { run: "opencode --log-level WARNING run review" },
+              { run: "opencode\\\nrun review" },
+              { run: "opencode --pure\\\nrun review" },
             ],
           },
         },
