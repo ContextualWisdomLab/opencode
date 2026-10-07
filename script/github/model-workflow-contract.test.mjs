@@ -135,6 +135,23 @@ if (authorAssociation === 'CONTRIBUTOR') {
       ...workflowNames.map((name) => path.join(workflowDirectory, name)),
       ...yamlFiles(localActionDirectory),
     ]
+    const shellLiteral = (value) =>
+      `["']*${[...value]
+        .map((character) => `\\\\?${character.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}["']*`)
+        .join("")}`
+    const booleanValue = `(?:${shellLiteral("true")}|${shellLiteral("false")})`
+    const logLevel = `(?:${["DEBUG", "INFO", "WARN", "ERROR"].map(shellLiteral).join("|")})`
+    const globalOption = `(?:${[
+      shellLiteral("--no-print-logs"),
+      shellLiteral("--no-pure"),
+      `${shellLiteral("--print-logs")}(?:=${booleanValue})?`,
+      `${shellLiteral("--pure")}(?:=${booleanValue})?`,
+      `${shellLiteral("--log-level")}(?:\\s+|=)${logLevel}`,
+    ].join("|")})`
+    const directOpenCodeCommand = new RegExp(
+      `(?<![\\w-])${shellLiteral("opencode")}(?:${shellLiteral(".exe")})?(?:\\s+${globalOption})*\\s+${shellLiteral("run")}(?![\\w-])`,
+      "i",
+    )
     const inspect = (name, workflow) => {
       const findings = []
       const visit = (value, location) => {
@@ -157,11 +174,10 @@ if (authorAssociation === 'CONTRIBUTOR') {
             }
             if (key === "run") {
               const normalizedCommand = entry.replace(/[\\`]\r?\n/g, "")
-              if (
-                /(?<![\w-])opencode(?:\.exe)?["']?(?:\s+(?:["']?--(?:no-(?:print-logs|pure)|(?:print-logs|pure)(?:["']?=["']?(?:true|false))?)["']?|["']?--log-level["']?(?:\s+|=)["']?(?:DEBUG|INFO|WARN|ERROR)["']?))*\s+["']?run(?:["']|\b)/i.test(
-                  normalizedCommand,
-                )
-              ) {
+              if (normalizedCommand.includes("$'")) {
+                findings.push(`${name}: unsupported ANSI-C shell construction at ${location}.${key}`)
+              }
+              if (directOpenCodeCommand.test(normalizedCommand)) {
                 findings.push(`${name}: direct OpenCode command at ${location}.${key}`)
               }
               if (entry.includes("opencode.ai/install") || entry.includes("opencode-ai")) {
@@ -235,6 +251,23 @@ if (authorAssociation === 'CONTRIBUTOR') {
               { run: "opencode --pure=\\\nfalse run review" },
               { run: "opencode --log-level\\\n=DEBUG run review" },
               { run: '& "C:\\Program Files\\opencode.exe" run review' },
+              { run: "open''code run review" },
+              { run: "opencode r''un review" },
+              { run: "opencode \\r\\u\\n review" },
+              { run: "opencode --pu''re run review" },
+              { run: `opencode --log-level D"E"B'U'G run review` },
+              { run: "opencode --pr''int-logs run review" },
+              { run: "opencode --no-p''ure run review" },
+              { run: "opencode --pure=tr''ue run review" },
+              { run: "open''code.e''xe r\\un review" },
+              { run: "open$''code run review" },
+              { run: String.raw`open$'\x63'ode run review` },
+              { run: 'open""code run review' },
+              { run: "open$'co'de run review" },
+              { run: "opencode $'run' review" },
+              { run: String.raw`open$'\u63'ode run review` },
+              { run: String.raw`opencode $'\162un' review` },
+              { run: "open$\\\n'co'de run review" },
             ],
           },
         },
@@ -271,6 +304,23 @@ if (authorAssociation === 'CONTRIBUTOR') {
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[28].run",
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[29].run",
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[30].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[31].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[32].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[33].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[34].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[35].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[36].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[37].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[38].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[39].run",
+      "mutation.yaml: unsupported ANSI-C shell construction at mutation.yaml.jobs.review.steps[40].run",
+      "mutation.yaml: unsupported ANSI-C shell construction at mutation.yaml.jobs.review.steps[41].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[42].run",
+      "mutation.yaml: unsupported ANSI-C shell construction at mutation.yaml.jobs.review.steps[43].run",
+      "mutation.yaml: unsupported ANSI-C shell construction at mutation.yaml.jobs.review.steps[44].run",
+      "mutation.yaml: unsupported ANSI-C shell construction at mutation.yaml.jobs.review.steps[45].run",
+      "mutation.yaml: unsupported ANSI-C shell construction at mutation.yaml.jobs.review.steps[46].run",
+      "mutation.yaml: unsupported ANSI-C shell construction at mutation.yaml.jobs.review.steps[47].run",
     ])
     expect(
       inspect("negative-mutation.yaml", {
@@ -282,6 +332,16 @@ if (authorAssociation === 'CONTRIBUTOR') {
               { run: "opencode --log-level WARNING run review" },
               { run: "opencode\\\nrun review" },
               { run: "opencode --pure\\\nrun review" },
+              { run: "my-open''code run review" },
+              { run: "opencode r''unner review" },
+              { run: "opencode --pu''reful run review" },
+              { run: `opencode --log-level D"E"B'U'GG run review` },
+              { run: 'open"$TOOL"code run review' },
+              { run: "opencode 'r un' review" },
+              { run: "opencode --pr''int-logs-extra run review" },
+              { run: "opencode --pure=tr''uest run review" },
+              { run: "open''code.e''xtra run review" },
+              { run: "open$TOOLcode run review" },
             ],
           },
         },

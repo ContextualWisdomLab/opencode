@@ -11,7 +11,10 @@
   `--log-level`, and `--pure` global options before `run`, using one conservative
   fail-closed deny-pattern instead of enumerating shell wrapper names. Shell
   line continuations cannot split the executable, option value, or `run` token
-  away from that inspection.
+  away from that inspection. Literal quote fragments and POSIX backslash
+  escapes within one shell word cannot hide those same command tokens.
+  Unsupported Bash ANSI-C shell construction now fails closed instead of being
+  partially interpreted.
 - Refresh the GLM 5.2 video artifact lock within its existing Remotion ranges,
   removing five scanner-confirmed vulnerable transitive versions and retaining
   a fail-closed dependency-floor regression for the committed lockfile.
