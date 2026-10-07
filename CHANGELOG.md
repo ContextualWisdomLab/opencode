@@ -8,8 +8,13 @@
   owner. The executable contract also rejects direct OpenCode commands hidden
   behind assignments, command wrappers, nested shell strings, quoting, or
   executable paths. The contract also recognizes the real CLI's `--print-logs`,
-  `--log-level`, and `--pure` global options before `run`, using one conservative
-  fail-closed deny-pattern instead of enumerating shell wrapper names. Shell
+  `--log-level`, and `--pure` global options before `run`. A bounded shell-word
+  scanner now limits findings to executable positions, including supported
+  wrappers, nested shell commands, substitutions, and command separators;
+  benign arguments, assignments, comments, and heredoc bodies stay clean.
+  Redirections are removed before command classification, workflow `shell`
+  executors are inspected, and unresolved dynamic executable or script
+  positions fail closed. Shell
   line continuations cannot split the executable, option value, or `run` token
   away from that inspection. Literal quote fragments and POSIX backslash
   escapes within one shell word cannot hide those same command tokens.
