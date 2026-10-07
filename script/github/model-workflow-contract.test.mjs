@@ -442,129 +442,175 @@ if (authorAssociation === 'CONTRIBUTOR') {
       }
       return false
     }
-    const commandRunsOpenCode = (command) => {
-      let index = commandStart(command)
-      let executable = command[index]
-      if (!executable || executable.dynamic) return false
-      let name = executableName(executable.value)
-      if (name === "env") {
-        index++
-        while (command[index]) {
-          const option = command[index].value
-          if (isAssignment(command[index])) {
-            index++
-            continue
+    const splitEnvWords = (source) => {
+      const words = []
+      let value = ""
+      let dynamic = false
+      let started = false
+      let quote = ""
+      const finish = () => {
+        if (!started) return
+        words.push({ value, dynamic })
+        value = ""
+        dynamic = false
+        started = false
+      }
+      for (let index = 0; index < source.length; index++) {
+        const character = source[index]
+        if (quote) {
+          if (character === quote) quote = ""
+          else if (character === "\\" && quote === "'") value += character
+          else if (character === "\\") {
+            const escaped = source[++index]
+            if (escaped === "_") value += " "
+            else if (escaped === "c") break
+            else if (escaped === "f") value += "\f"
+            else if (escaped === "n") value += "\n"
+            else if (escaped === "r") value += "\r"
+            else if (escaped === "t") value += "\t"
+            else if (escaped === "v") value += "\v"
+            else if (["\\", '"', "'", "#", "$"].includes(escaped)) value += escaped
+            else return { unsupported: true, words }
           }
-          if (option === "--") {
-            index++
+          else {
+            if (character === "$" || character === "`") dynamic = true
+            value += character
+          }
+          started = true
+          continue
+        }
+        if (character === "'" || character === '"') {
+          quote = character
+          started = true
+          continue
+        }
+        if (character === "\\") {
+          const escaped = source[++index]
+          if (escaped === "_") finish()
+          else if (escaped === "c") break
+          else if (escaped === "f") value += "\f"
+          else if (escaped === "n") value += "\n"
+          else if (escaped === "r") value += "\r"
+          else if (escaped === "t") value += "\t"
+          else if (escaped === "v") value += "\v"
+          else if (["\\", '"', "'", "#", "$"].includes(escaped)) value += escaped
+          else return { unsupported: true, words }
+          started ||= escaped !== "_"
+          continue
+        }
+        if (character === "#" && !started) break
+        if (/\s/.test(character)) {
+          finish()
+          continue
+        }
+        if (character === "$" || character === "`") dynamic = true
+        value += character
+        started = true
+      }
+      if (quote) return { unsupported: true, words }
+      finish()
+      return { unsupported: false, words }
+    }
+    const unwrapCommand = (initialCommand) => {
+      let command = initialCommand
+      let index = commandStart(command)
+      const sourceWidth = initialCommand.reduce((total, token) => total + token.value.length + 1, 0)
+      for (let remaining = sourceWidth + 1; remaining > 0; remaining--) {
+        const executable = command[index]
+        const name = executableName(executable?.value ?? "")
+        if (!executable || executable.dynamic) return { command, executable, index, name }
+        if (name === "env") {
+          index++
+          let replaced = false
+          while (command[index]) {
+            const option = command[index]
+            if (isAssignment(option)) {
+              index++
+              continue
+            }
+            if (option.value === "--") {
+              index++
+              break
+            }
+            if (["-S", "--split-string"].includes(option.value)) {
+              const operand = command[index + 1]
+              if (!operand || operand.dynamic) return { command, dynamicScript: true, index, name }
+              const split = splitEnvWords(operand.value)
+              if (split.unsupported) return { command, dynamicScript: true, index, name }
+              command = [
+                { value: "env", dynamic: false },
+                ...split.words,
+                ...command.slice(index + 2),
+              ]
+              index = 0
+              replaced = true
+              break
+            }
+            if (option.value.startsWith("--split-string=")) {
+              if (option.dynamic) return { command, dynamicScript: true, index, name }
+              const split = splitEnvWords(option.value.slice("--split-string=".length))
+              if (split.unsupported) return { command, dynamicScript: true, index, name }
+              command = [
+                { value: "env", dynamic: false },
+                ...split.words,
+                ...command.slice(index + 1),
+              ]
+              index = 0
+              replaced = true
+              break
+            }
+            if (["-C", "--chdir", "-u", "--unset"].includes(option.value)) {
+              index += 2
+              continue
+            }
+            if (/^-[^-]*S/.test(option.value)) {
+              return { command, dynamicScript: true, index, name }
+            }
+            if (option.value.startsWith("-") && option.value !== "-") {
+              index++
+              continue
+            }
             break
           }
-          if (["-S", "--split-string"].includes(option)) {
-            const script = command.slice(index + 1)
-            if (script.some((token) => token.dynamic)) return false
-            return containsDirectOpenCodeCommand(script.map((token) => token.value).join(" "))
-          }
-          if (option.startsWith("--split-string=")) {
-            return containsDirectOpenCodeCommand(
-              [option.slice("--split-string=".length), ...command.slice(index + 1).map((token) => token.value)].join(" "),
-            )
-          }
-          if (["-C", "--chdir", "-u", "--unset"].includes(option)) {
-            index += 2
-            continue
-          }
-          if (option.startsWith("-") && option !== "-") {
-            index++
-            continue
-          }
-          break
+          if (replaced) continue
+          continue
         }
-        executable = command[index]
-        if (!executable || executable.dynamic) return false
-        name = executableName(executable.value)
-      }
-      if (name === "command") {
-        index++
-        while (command[index]?.value.startsWith("-")) {
-          const option = command[index++].value
-          if (option === "--") break
-          if (/^-[^-]*[vV]/.test(option)) return false
+        if (name === "command") {
+          index++
+          while (command[index]?.value.startsWith("-")) {
+            const option = command[index++].value
+            if (option === "--") break
+            if (/^-[^-]*[vV]/.test(option)) return { command, index, name, query: true }
+          }
+          continue
         }
-        executable = command[index]
-        if (!executable || executable.dynamic) return false
-        name = executableName(executable.value)
-      }
-      if (name === "exec") {
-        index++
-        while (command[index]?.value.startsWith("-")) {
-          const option = command[index++].value
-          if (option === "--") break
-          if (option === "-a") index++
+        if (name === "exec") {
+          index++
+          while (command[index]?.value.startsWith("-")) {
+            const option = command[index++].value
+            if (option === "--") break
+            if (option === "-a") index++
+          }
+          continue
         }
-        executable = command[index]
-        if (!executable || executable.dynamic) return false
-        name = executableName(executable.value)
-      }
-      if (name === "time") {
-        index++
-        while (command[index]?.value.startsWith("-")) {
-          const option = command[index++].value
-          if (["-f", "--format", "-o", "--output"].includes(option)) index++
+        if (name === "time") {
+          index++
+          while (command[index]?.value.startsWith("-")) {
+            const option = command[index++].value
+            if (["-f", "--format", "-o", "--output"].includes(option)) index++
+          }
+          continue
         }
-        executable = command[index]
-        if (!executable || executable.dynamic) return false
-        name = executableName(executable.value)
+        return { command, executable, index, name }
       }
+      return { command, dynamicScript: true, index, name: "" }
+    }
+    const commandScript = ({ command, index, name }) => {
       if (name === "eval") {
-        const script = command.slice(index + 1)
-        if (script.some((token) => token.dynamic)) return false
-        return containsDirectOpenCodeCommand(script.map((token) => token.value).join(" "))
+        const tokens = command.slice(index + 1)
+        return { source: tokens.map((token) => token.value).join(" "), tokens }
       }
-      if (["bash", "dash", "sh", "zsh", "powershell", "pwsh"].includes(name)) {
-        index++
-        while (command[index]) {
-          const option = command[index].value
-          const acceptsScript =
-            ["powershell", "pwsh"].includes(name)
-              ? option.toLowerCase() === "-command"
-              : /^-[a-z]*c[a-z]*$/i.test(option)
-          if (acceptsScript) {
-            const script = ["powershell", "pwsh"].includes(name)
-              ? command.slice(index + 1)
-              : command.slice(index + 1, index + 2)
-            if (script.some((token) => token.dynamic)) return false
-            return containsDirectOpenCodeCommand(script.map((token) => token.value).join(" "))
-          }
-          index++
-        }
-        return false
-      }
-      if (name !== "opencode" && name !== "opencode.exe") return false
-      return hasOpenCodeRunArguments(command, index + 1)
-    }
-    const commandUsesDynamicExecutable = (command) => {
-      const index = commandStart(command)
-      const executable = command[index]
-      return (
-        isDynamicVariable(executable) &&
-        hasOpenCodeRunArguments(command, index + 1)
-      )
-    }
-    const commandUsesDynamicScript = (command) => {
-      let index = commandStart(command)
-      const name = executableName(command[index]?.value ?? "")
-      if (name === "eval") return command.slice(index + 1).some(isVariableReference)
-      if (name === "env") {
-        index++
-        while (command[index]) {
-          if (["-S", "--split-string"].includes(command[index].value)) {
-            return isVariableReference(command[index + 1] ?? { value: "" })
-          }
-          index++
-        }
-        return false
-      }
-      if (!["bash", "dash", "sh", "zsh", "powershell", "pwsh"].includes(name)) return false
+      if (!["bash", "dash", "sh", "zsh", "powershell", "pwsh"].includes(name)) return undefined
       index++
       while (command[index]) {
         const option = command[index].value
@@ -572,10 +618,51 @@ if (authorAssociation === 'CONTRIBUTOR') {
           ["powershell", "pwsh"].includes(name)
             ? option.toLowerCase() === "-command"
             : /^-[a-z]*c[a-z]*$/i.test(option)
-        if (acceptsScript) return isVariableReference(command[index + 1] ?? { value: "" })
+        if (acceptsScript) {
+          const tokens = ["powershell", "pwsh"].includes(name)
+            ? command.slice(index + 1)
+            : command.slice(index + 1, index + 2)
+          return { source: tokens.map((token) => token.value).join(" "), tokens }
+        }
         index++
       }
-      return false
+      return undefined
+    }
+    const commandRunsOpenCode = (initialCommand) => {
+      const resolved = unwrapCommand(initialCommand)
+      const { command, executable, index, name } = resolved
+      if (resolved.invalid || resolved.query || resolved.dynamicScript || !executable || executable.dynamic) return false
+      if (name === "eval") {
+        const script = commandScript(resolved)
+        if (script.tokens.some((token) => token.dynamic)) return false
+        return containsDirectOpenCodeCommand(script.source)
+      }
+      if (["bash", "dash", "sh", "zsh", "powershell", "pwsh"].includes(name)) {
+        const script = commandScript(resolved)
+        if (!script || script.tokens.some((token) => token.dynamic)) return false
+        return containsDirectOpenCodeCommand(script.source)
+      }
+      if (name !== "opencode" && name !== "opencode.exe") return false
+      return hasOpenCodeRunArguments(command, index + 1)
+    }
+    const commandUsesDynamicExecutable = (initialCommand) => {
+      const resolved = unwrapCommand(initialCommand)
+      const { command, executable, index } = resolved
+      if (resolved.invalid || resolved.query || resolved.dynamicScript || !executable) return false
+      if (isDynamicVariable(executable)) return hasOpenCodeRunArguments(command, index + 1)
+      const script = commandScript(resolved)
+      if (!script || script.tokens.some((token) => token.dynamic)) return false
+      return containsUnsupportedDynamicExecutable(script.source)
+    }
+    const commandUsesDynamicScript = (initialCommand) => {
+      const resolved = unwrapCommand(initialCommand)
+      if (resolved.invalid || resolved.query) return false
+      if (resolved.dynamicScript) return true
+      const script = commandScript(resolved)
+      if (!script) return false
+      if (script.tokens.some(isVariableReference)) return true
+      if (script.tokens.some((token) => token.dynamic)) return false
+      return containsUnsupportedDynamicScript(script.source)
     }
     const containsDirectOpenCodeCommand = (source) => {
       const executable = withoutHeredocBodies(source)
@@ -783,6 +870,23 @@ if (authorAssociation === 'CONTRIBUTOR') {
               { run: "env -S 'opencode run review'" },
               { run: "env --split-string='opencode run review'" },
               { run: 'CMD="opencode run review"; env -S "$CMD"' },
+              { run: "command env opencode run review" },
+              { run: "exec env opencode run review" },
+              { run: "time env opencode run review" },
+              { run: "command command opencode run review" },
+              { run: 'command env "$TOOL" run review' },
+              { run: 'command bash -c "$CMD"' },
+              { run: 'command env -S "$CMD"' },
+              { run: `bash -c '"$TOOL" run review'` },
+              { run: `bash -c 'bash -c "$CMD"'` },
+              { run: `eval 'bash -c "$CMD"'` },
+              { run: "env -S 'bash -c' 'opencode run review'" },
+              { run: String.raw`env -S 'opencode\_run review'` },
+              { run: `env -S '${"env ".repeat(40)}opencode run review'` },
+              { run: "env -S 'env # comment' opencode run review" },
+              { run: "env -S'opencode run review'" },
+              { run: "env -iS'opencode run review'" },
+              { run: "command env -S'opencode run review'" },
             ],
           },
         },
@@ -881,6 +985,23 @@ if (authorAssociation === 'CONTRIBUTOR') {
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[90].run",
       "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[91].run",
       "mutation.yaml: unsupported dynamic script at mutation.yaml.jobs.review.steps[92].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[93].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[94].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[95].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[96].run",
+      "mutation.yaml: unsupported dynamic executable at mutation.yaml.jobs.review.steps[97].run",
+      "mutation.yaml: unsupported dynamic script at mutation.yaml.jobs.review.steps[98].run",
+      "mutation.yaml: unsupported dynamic script at mutation.yaml.jobs.review.steps[99].run",
+      "mutation.yaml: unsupported dynamic executable at mutation.yaml.jobs.review.steps[100].run",
+      "mutation.yaml: unsupported dynamic script at mutation.yaml.jobs.review.steps[101].run",
+      "mutation.yaml: unsupported dynamic script at mutation.yaml.jobs.review.steps[102].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[103].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[104].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[105].run",
+      "mutation.yaml: direct OpenCode command at mutation.yaml.jobs.review.steps[106].run",
+      "mutation.yaml: unsupported dynamic script at mutation.yaml.jobs.review.steps[107].run",
+      "mutation.yaml: unsupported dynamic script at mutation.yaml.jobs.review.steps[108].run",
+      "mutation.yaml: unsupported dynamic script at mutation.yaml.jobs.review.steps[109].run",
     ])
     expect(
       inspect("negative-mutation.yaml", {
@@ -923,6 +1044,10 @@ if (authorAssociation === 'CONTRIBUTOR') {
               { run: 'TOOL=echo; "$TOOL" opencode run review' },
               { run: "echo safe # $(opencode run review)" },
               { run: "# `opencode run review`" },
+              { run: "exec command -v opencode run review" },
+              { run: "command command -V opencode run review" },
+              { run: `env -S 'printf "%s\\n" opencode && opencode run review'` },
+              { run: String.raw`env -S "'opencode\_run' review"` },
             ],
           },
         },

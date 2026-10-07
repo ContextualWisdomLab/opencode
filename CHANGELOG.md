@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Inspect arbitrarily ordered and repeated literal `env`, `command`, `exec`,
+  and `time` wrappers through one source-width-bounded resolver. The same
+  boundary now reaches direct OpenCode invocations, dynamic executables, and
+  dynamic shell scripts instead of protecting only the direct-command path.
+  Preserve `command -v`/`-V` as query-only negatives and preserve `env -S`
+  argv boundaries, GNU `\_` spacing, and width-bounded nested expansion so
+  shell operators inside its split string do not become false executable
+  commands or an expansion-depth bypass. Attached or clustered `-S` forms
+  fail closed instead of being skipped as unrelated options.
 - Remove repository-owned direct model execution from GitHub Actions and the
   release call graph; release notes now use GitHub's platform generator while
   the central ContextualWisdomLab orchestration contract remains the sole model
