@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- Inspect arbitrarily ordered and repeated literal `env`, `command`, `exec`,
+  and `time` wrappers through one source-width-bounded resolver. The same
+  boundary now reaches direct OpenCode invocations, dynamic executables, and
+  dynamic shell scripts instead of protecting only the direct-command path.
+  Preserve `command -v`/`-V` as query-only negatives and preserve `env -S`
+  argv boundaries, GNU `\_` spacing, and width-bounded nested expansion so
+  shell operators inside its split string do not become false executable
+  commands or an expansion-depth bypass. Attached or clustered `-S` forms
+  fail closed instead of being skipped as unrelated options.
+- Remove repository-owned direct model execution from GitHub Actions and the
+  release call graph; release notes now use GitHub's platform generator while
+  the central ContextualWisdomLab orchestration contract remains the sole model
+  owner. The executable contract also rejects direct OpenCode commands hidden
+  behind assignments, command wrappers, nested shell strings, quoting, or
+  executable paths. The contract also recognizes the real CLI's `--print-logs`,
+  `--log-level`, and `--pure` global options before `run`. A bounded shell-word
+  scanner now limits findings to executable positions, including supported
+  wrappers, nested shell commands, substitutions, and command separators;
+  benign arguments, assignments, comments, and heredoc bodies stay clean.
+  Redirections are removed before command classification, workflow `shell`
+  executors are inspected, and unresolved dynamic executable or script
+  positions fail closed. Shell
+  line continuations cannot split the executable, option value, or `run` token
+  away from that inspection. Literal quote fragments and POSIX backslash
+  escapes within one shell word cannot hide those same command tokens.
+  Unsupported Bash ANSI-C shell construction now fails closed instead of being
+  partially interpreted.
 - Refresh the GLM 5.2 video artifact lock within its existing Remotion ranges,
   removing five scanner-confirmed vulnerable transitive versions and retaining
   a fail-closed dependency-floor regression for the committed lockfile.
