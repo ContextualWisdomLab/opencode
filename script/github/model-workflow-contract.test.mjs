@@ -688,6 +688,207 @@ if (authorAssociation === 'CONTRIBUTOR') {
         executable.subcommands.some(containsUnsupportedDynamicScript)
       )
     }
+    const tokenizeJavaScript = (source) => {
+      const tokens = []
+      const templateQuote = String.fromCharCode(96)
+      for (let index = 0; index < source.length; ) {
+        const character = source[index]
+        if (/\s/.test(character)) {
+          index++
+          continue
+        }
+        if (character === "/" && source[index + 1] === "/") {
+          index += 2
+          while (index < source.length && source[index] !== "\n") index++
+          continue
+        }
+        if (character === "/" && source[index + 1] === "*") {
+          index += 2
+          while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) index++
+          index = Math.min(source.length, index + 2)
+          continue
+        }
+        const previous = tokens.at(-1)?.value
+        const regexCanStart =
+          !previous ||
+          ["=", "(", "[", "{", ",", ":", ";", "return", "=>", "!", "?", "&&", "||"].includes(previous)
+        if (
+          character === "/" &&
+          source[index + 1] !== "/" &&
+          source[index + 1] !== "*" &&
+          regexCanStart
+        ) {
+          let cursor = index + 1
+          let escaped = false
+          let inCharacterClass = false
+          while (cursor < source.length) {
+            const current = source[cursor++]
+            if (escaped) {
+              escaped = false
+              continue
+            }
+            if (current === "\\") {
+              escaped = true
+              continue
+            }
+            if (current === "[") inCharacterClass = true
+            else if (current === "]") inCharacterClass = false
+            else if (current === "/" && !inCharacterClass) break
+          }
+          while (/[A-Za-z]/.test(source[cursor] ?? "")) cursor++
+          tokens.push({ type: "regex", value: source.slice(index, cursor) })
+          index = cursor
+          continue
+        }
+        if (character === "'" || character === '"' || character === templateQuote) {
+          const quote = character
+          const type = quote === templateQuote ? "template" : "string"
+          index++
+          let value = ""
+          while (index < source.length) {
+            const current = source[index++]
+            if (current === quote) break
+            if (current !== "\\") {
+              value += current
+              continue
+            }
+            const escaped = source[index++]
+            if (escaped === "n") value += "\n"
+            else if (escaped === "r") value += "\r"
+            else if (escaped === "t") value += "\t"
+            else if (escaped === "b") value += "\b"
+            else if (escaped === "f") value += "\f"
+            else value += escaped ?? ""
+          }
+          tokens.push({ type, value })
+          continue
+        }
+        if (/[A-Za-z_$]/.test(character)) {
+          const start = index++
+          while (/[A-Za-z0-9_$]/.test(source[index] ?? "")) index++
+          tokens.push({ type: "identifier", value: source.slice(start, index) })
+          continue
+        }
+        tokens.push({ type: "punctuation", value: character })
+        index++
+      }
+      return tokens
+    }
+    const containsDirectOpenCodeScript = (source) => {
+      const tokens = tokenizeJavaScript(source)
+      const processFunctions = new Set([
+        "exec",
+        "execSync",
+        "spawn",
+        "spawnSync",
+        "execFile",
+        "execFileSync",
+      ])
+      for (let index = 0; index < tokens.length; index++) {
+        const token = tokens[index]
+        if (
+          processFunctions.has(token.value) &&
+          [":", "as"].includes(tokens[index + 1]?.value) &&
+          tokens[index + 2]?.type === "identifier"
+        ) {
+          processFunctions.add(tokens[index + 2].value)
+        }
+        if (
+          token.type === "identifier" &&
+          tokens[index + 1]?.value === "=" &&
+          tokens[index + 2]?.type === "identifier" &&
+          processFunctions.has(tokens[index + 2].value)
+        ) {
+          processFunctions.add(token.value)
+        }
+      }
+      const variables = new Map()
+      for (let index = 0; index < tokens.length; index++) {
+        if (
+          ["const", "let", "var"].includes(tokens[index].value) &&
+          tokens[index + 1]?.type === "identifier" &&
+          tokens[index + 2]?.value === "="
+        ) {
+          const value = tokens[index + 3]
+          if (value?.type === "string" || value?.type === "template") {
+            variables.set(tokens[index + 1].value, value.value)
+          }
+        }
+      }
+      const expandTemplate = (value) =>
+        value.replace(
+          new RegExp("\\$\\{([A-Za-z_$][A-Za-z0-9_$]*)\\}", "g"),
+          (_, name) => variables.get(name) ?? "",
+        )
+      const readExpression = (start) => {
+        const first = tokens[start]
+        if (!first) return { value: undefined, end: start + 1 }
+        let value
+        let end = start + 1
+        if (first.type === "string") value = first.value
+        else if (first.type === "template") value = expandTemplate(first.value)
+        else if (first.type === "identifier" && variables.has(first.value)) value = variables.get(first.value)
+        while (tokens[end]?.value === "+") {
+          const next = tokens[end + 1]
+          if (next?.type === "string") value = String(value ?? "") + next.value
+          else if (next?.type === "template") value = String(value ?? "") + expandTemplate(next.value)
+          else break
+          end += 2
+        }
+        return { value, end }
+      }
+      const parseArray = (start) => {
+        if (tokens[start]?.value !== "[") return undefined
+        const values = []
+        let index = start + 1
+        while (index < tokens.length && tokens[index].value !== "]") {
+          if (tokens[index].value === ",") {
+            index++
+            continue
+          }
+          const expression = readExpression(index)
+          if (expression.value === undefined) {
+            return { values, dynamic: true, end: index + 1 }
+          }
+          values.push({ value: expression.value, dynamic: false })
+          index = expression.end
+        }
+        return { values, dynamic: false, end: index + 1 }
+      }
+      const isOpenCodeExecutable = (value) =>
+        ["opencode", "opencode.exe"].includes(executableName(value ?? ""))
+      for (let index = 0; index < tokens.length; index++) {
+        const token = tokens[index]
+        if (processFunctions.has(token.value) && tokens[index + 1]?.value === "(") {
+          const executable = readExpression(index + 2)
+          if (executable.value !== undefined && containsDirectOpenCodeCommand(executable.value)) return true
+          if (
+            executable.value !== undefined &&
+            isOpenCodeExecutable(executable.value) &&
+            tokens[executable.end]?.value === ","
+          ) {
+            const argv = parseArray(executable.end + 1)
+            if (argv?.dynamic || (argv && hasOpenCodeRunArguments(argv.values, 0))) return true
+          }
+        }
+        if (
+          token.value === "Bun" &&
+          tokens[index + 1]?.value === "." &&
+          tokens[index + 2]?.value === "spawn" &&
+          tokens[index + 3]?.value === "("
+        ) {
+          const argv = parseArray(index + 4)
+          if (argv?.values.length && isOpenCodeExecutable(argv.values[0].value)) {
+            if (argv.dynamic || hasOpenCodeRunArguments(argv.values, 1)) return true
+          }
+        }
+        if (token.value === "$" && tokens[index + 1]?.type === "template") {
+          if (containsDirectOpenCodeCommand(expandTemplate(tokens[index + 1].value))) return true
+        }
+      }
+      return false
+    }
+
     const inspect = (name, workflow) => {
       const findings = []
       const visit = (value, location) => {
@@ -1048,6 +1249,46 @@ if (authorAssociation === 'CONTRIBUTOR') {
               { run: "command command -V opencode run review" },
               { run: `env -S 'printf "%s\\n" opencode && opencode run review'` },
               { run: String.raw`env -S "'opencode\_run' review"` },
+            ],
+          },
+        },
+      }),
+    ).toEqual([])
+  })
+
+  test("rejects direct model execution hidden in inline JavaScript actions", () => {
+    expect(
+      inspect("script-mutation.yaml", {
+        jobs: {
+          review: {
+            steps: [
+              { with: { script: 'require("node:child_process").execSync("opencode run review")' } },
+              { with: { script: 'spawnSync("/usr/local/bin/opencode.exe", ["run", "review"])' } },
+              { with: { script: 'Bun.spawn(["/usr/local/bin/opencode", "--pure", "run", "review"])' } },
+              { with: { script: 'const cli = "opencode"; spawn(cli, ["run", "review"])' } },
+              { with: { script: 'const { execSync: run } = require("node:child_process"); run("opencode" + " run review")' } },
+            ],
+          },
+        },
+      }),
+    ).toEqual([
+      "script-mutation.yaml: direct OpenCode script execution at script-mutation.yaml.jobs.review.steps[0].with.script",
+      "script-mutation.yaml: direct OpenCode script execution at script-mutation.yaml.jobs.review.steps[1].with.script",
+      "script-mutation.yaml: direct OpenCode script execution at script-mutation.yaml.jobs.review.steps[2].with.script",
+      "script-mutation.yaml: direct OpenCode script execution at script-mutation.yaml.jobs.review.steps[3].with.script",
+      "script-mutation.yaml: direct OpenCode script execution at script-mutation.yaml.jobs.review.steps[4].with.script",
+    ])
+    expect(
+      inspect("script-negative.yaml", {
+        jobs: {
+          review: {
+            steps: [
+              { with: { script: '// execSync("opencode run review")\nconst note = "safe"' } },
+              { with: { script: 'const note = "opencode run review"' } },
+              { with: { script: 'execSync("echo opencode run review")' } },
+              { with: { script: 'spawnSync("echo", ["opencode", "run", "review"])' } },
+              { with: { script: 'const note = \x60execSync("opencode run review")\x60' } },
+              { with: { script: 'const note = /execSync\\("opencode run review"\\)/' } },
             ],
           },
         },
